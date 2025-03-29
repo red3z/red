@@ -406,7 +406,7 @@ list2 = personList;
 
 ## 集合
 
-![image-20240817015824056](/Users/zhangzizhao/Library/Application Support/typora-user-images/image-20240817015824056.png)
+![image-20240817015824056](./typora-user-images/image-20240817015824056.png)
 
 集合要求元素一定重写equals()方法, 因为一些方法要调用, 如contains(), remove()	
 
