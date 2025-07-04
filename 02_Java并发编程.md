@@ -186,20 +186,17 @@ Lock接口的实现有 ReentrantLock, ReentrantReadWriteLock.ReadLock(WriteLock)
 
 
 
-### ReentrantReadWriteLock
+### JUC核心类
 
-ReentrantLock是互斥锁, 如果读操作多, 写操作少, 效率较低. 为了提高ReentrantLock的效率, 引入了读写锁, 是共享的.
-
-
-
-| JUC核心类          |                                                              |
-| ------------------ | ------------------------------------------------------------ |
-| ConcurrentHashMap  |                                                              |
-| ThreadPoolExecutor |                                                              |
-| ReentrantLock      | lock() :CAS修改state, 失败则执行AQS的acquire(), 自旋几圈就LockSupport.park()阻塞; unlock() 执行AQS的release(), CAS修改state, 成功则LockSupport.unpark()唤醒. |
-| Semaphore          |                                                              |
-| CountDownLatch     | 汇总线程CountDownLatch.await()自旋几圈就LockSupport.park()阻塞, n个线程执行完毕后执行CountDownLatch.countDown()会判断state是否为0, 如果为1, 则LockSupport.unpark()唤醒汇总线程. |
-| CyclicBarrier      | 依赖了ReentrantLock中的Condition, n个线程执行CyclicBarrier.await() 如果线程未全部阻塞则Condition.await()阻塞; 如果全部阻塞则Condition.signalAll(). |
+| JUC核心类                                                    |                                                              |
+| ------------------------------------------------------------ | ------------------------------------------------------------ |
+| ConcurrentHashMap                                            |                                                              |
+| ThreadPoolExecutor                                           |                                                              |
+| ReentrantLock                                                | lock() :CAS修改state, 失败则执行AQS的acquire(), 自旋几圈就LockSupport.park()阻塞; unlock() 执行AQS的release(), CAS修改state, 成功则LockSupport.unpark()唤醒. |
+| ReentrantReadWriteLock                                       | ReentrantLock是互斥锁, 如果读操作多, 写操作少, 效率较低. 为了提高ReentrantLock的效率, 引入了读写锁, 是共享的. |
+| Semaphore                                                    |                                                              |
+| CountDownLatch 一个线程等待n个线程完成                       | 汇总线程CountDownLatch.await()自旋几圈就LockSupport.park()阻塞, n个线程任务完成后执行CountDownLatch.countDown() 进行state--, 如果state为0, 则LockSupport.unpark()唤醒汇总线程. |
+| CyclicBarrier 给多个线程分阶段, 全部执行完第一阶段, 才执行第二阶段. | 依赖了ReentrantLock中的Condition, n个线程执行CyclicBarrier.await() 如果线程未全部阻塞则Condition.await()阻塞; 如果全部阻塞则Condition.signalAll(). |
 
 
 
@@ -270,6 +267,24 @@ lock()获取了锁说明线程在执行任务中;
 如果在执行任务则不应该中断线程; 如果线程没在处理任务时可以中断;
 
 线程池结束的时候会调用interruptIdleWorkers()中断空闲的线程.
+
+
+
+## 线程池的线程数设置策略
+
+CPU密集 n+1, 线程数 > CPU核心数时, 线程数多少都一样
+
+IO密集, 其实线程数多少都无所谓 (2*n的说法是Java并发编程这本书中给出的公式, 假定计算时间等于等待时间算出的2n)
+
+Tomcat线程池线程数达到200后入队, 队满触发拒绝策略.
+
+
+
+线程数其实可以设置很高, 但为什么大家不敢设置很高? 说是上下文切换会带来损耗? 这个说法有些过时, 当代CPU上下文切换1-3微秒.
+
+
+
+总结: CPU密集型>n就行; IO密集型随便, 主要取决于外部.
 
 
 
@@ -409,7 +424,9 @@ CopyOnWrite系列, 写操作的时候要复制一个副本, 在副本中做各�
 | 1.8扩容机制                 | 扩容时, 读操作继续读老数组; 写操作时, 写线程帮忙扩容.        |
 
 
+# 异步编程
 
+ListenableFuture
 
 
 

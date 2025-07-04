@@ -169,9 +169,11 @@ read(file, tmp_buf, len) + write(socket, tmp_buf, len)
 
 mmap(file, len) + write(sockfd, buf, len)
 
-read()会把内核缓冲区的数据拷贝到用户缓冲区, 我们不需要这一步, 可以用mmap()替换read()
+read()会把内核缓冲区的数据拷贝到用户缓冲区, 用mmap()替换read()就省了这一步. 原理是将虚拟地址映射到内核空间的地址, 不用mmap()虚拟地址映射到的是用户空间的地址.
 
-<img src="/Users/zhangzizhao/Library/Application Support/typora-user-images/image-20250221184254252.png" alt="image-20250221184254252" style="zoom:67%;" />
+RocketMQ用的就是mmap()
+
+<img src="./typora-user-images/image-20250221184254252.png" alt="image-20250221184254252" style="zoom:67%;" />
 
 1. mmap(): DMA把数据从磁盘拷贝到内核缓冲区; 应用程序和操作系统共享这个内核缓冲区.
 2. write(): CPU: 内核缓冲区 --> Socket缓冲区
@@ -181,11 +183,20 @@ read()会把内核缓冲区的数据拷贝到用户缓冲区, 我们不需要这
 
 
 
+mmap()的缺点: 
+
+1. 文件无法完成拓展：因为执行 mmap 的时候，你所能操作的范围就已经确定了，无法增加文件长度
+2. 映射地址的开销
+3. 缺页中断的开销
+4. mmap()不适合读大文件
+
+
+
 ### sendfile()
 
 sendfile(out_fd, in_fd, offset, count)
 
-<img src="/Users/zhangzizhao/Library/Application Support/typora-user-images/image-20250221184947345.png" alt="image-20250221184947345" style="zoom:67%;" />
+<img src="./typora-user-images/image-20250221184947345.png" alt="image-20250221184947345" style="zoom:67%;" />
 
 1. DMA把数据从磁盘拷贝到内核缓冲区; 
 2. CPU把数据从内核缓冲区拷贝到网卡缓冲区
@@ -197,7 +208,7 @@ sendfile(out_fd, in_fd, offset, count)
 
 ### SG-DMA 的 sendfile()
 
-<img src="/Users/zhangzizhao/Library/Application Support/typora-user-images/image-20250221185706738.png" alt="image-20250221185706738" style="zoom:67%;" />
+<img src="./typora-user-images/image-20250221185706738.png" alt="image-20250221185706738" style="zoom:67%;" />
 
 1. DMA把数据从磁盘拷贝到内核缓冲区; 
 2. 将描述符和数据长度发送到Socket缓冲区;
@@ -211,7 +222,7 @@ sendfile(out_fd, in_fd, offset, count)
 
 大文件用 异步IO+直接IO: (异步指的是发送IO请求后不阻塞, 直接指的是绕过PageCache)
 
-![image-20250221191756563](/Users/zhangzizhao/Library/Application Support/typora-user-images/image-20250221191756563.png)
+![image-20250221191756563](./typora-user-images/image-20250221191756563.png)
 
 
 
