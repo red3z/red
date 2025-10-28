@@ -23,7 +23,7 @@
 
 
 
-创建线程类的方式: 本质上都是Runnable
+创建线程类的方式: 本质上都是Runnable.
 
 1. `extends Thread`,  Thread类实现了Runnable接口.
 
@@ -223,8 +223,8 @@ JDK中提供了Executors, 提供了很多封装好了的线程池, 为什么不�
 | 最大线程数     | 当任务队列满的时候, 生成几个非核心线程, 堵在队列外面的任务插队分配给非核心线程 |
 | 生存时间       | 临时线程执行完任务后, 阻塞一个生存时间再去阻塞队列获取, 如果获取不到, 则线程结束. |
 | 阻塞队列       | 阻塞队列与队列有什么区别? 阻塞队列额外提供两个方法, 如果offer()时队列已满, 则当前线程会阻塞直到不满; 如果poll()时队列为空, 则当前线程阻塞直到不空. |
-| 拒绝策略       | 策略1: 抛异常; 策略2: 给主线程执行; 策略3: 阻塞队列最前面的任务扔掉; 策略4: 什么都不干, 也就是把这个任务扔掉 |
-| 线程工厂       | 线程工厂负责new线程, 在线程池中, Thread被封装为Work. 为什么要自己写个线程工厂? 给线程设置一些属性和参数, 从而满足业务需求, 也方便在排查问题的时候找到问题; 指定如何处理未捕捉的异常. |
+| 拒绝策略       | 策略1: 抛异常; 策略2: 给主线程执行; 策略3: 阻塞队列最前面的任务扔掉; 策略4: 什么都不干, 也就是把这个任务扔掉; 策略5: 自定义, 将任务持久化, 存到MySQL, Redis, MQ中, 重写线程池的afterExecute(), 当线程执行完任务的时候, 将存下来的任务放到阻塞队列中 |
+| 线程工厂       | 线程工厂负责new线程, 在线程池中, Thread被封装为Work. 为什么要自己写个线程工厂? 给线程根据业务命名; 创建守护线程; 给线程设置一些属性和参数, 从而满足业务需求, 也方便在排查问题的时候找到问题; 指定如何处理未捕捉的异常. |
 
 如果线程池执行的线程抛出了异常, 线程会将异常抛出, 线程结束. 因为线程工厂可以配置未捕捉异常的处理, 如果线程任务本身没有捕捉异常, 可以由线程工厂处理.
 
@@ -288,10 +288,27 @@ Tomcat线程池线程数达到200后入队, 队满触发拒绝策略.
 
 
 
+## 动态配置线程池参数
+
+将线程池的参数放在配置中心, 线程池监听配置中心. 阻塞队列的大小不可变, 如果需要可变需要重写.
+
+
+
+## 线程池监控
+
+线程池的监控指标: 活跃线程数, 当前线程数, 阻塞队列大小, 完成任务数, 总任务数
+
+收集监控指标: 可以用定时任务几秒采集一下; 或者重写afterExecute(), beforeExecute()采集指标数据; 
+
+上报监控指标到监控系统, 可视化图表
+
+
+
 # ThreadLocal
 
 | ThreadLocal的应用场景                                        |                                                              |
 | ------------------------------------------------------------ | ------------------------------------------------------------ |
+| 一般使用时将ThreadLocal设为static的                          | 因为threadLocal.get()是从当前的Thread.ThreadLocalMap中获取值, 即使是相同的key(threadLocal)也不会是同一个对象 |
 | 线程不安全的对象, 不想每次调用都创建一次, 就放入ThreadLocal. | DateUtils用SimpleDateFormat对时间进行格式化, 但是SimpleDateFormat不是线程安全的, 可以在方法上创建SimpleDateFormat对象, 但每调用一次就创建一次比较浪费, 所以就用ThreadLocal让每个线程装载着自己的SimpleDateFormat对象, 以确保线程安全. |
 | Spring事务                                                   | 一次事务的多个操作需要在同一个数据库连接上, 连接是由连接池分配, 同一个线程的多个操作可能会被分配不同的连接, Spring用ThreadLocal来解决. 每次获取连接的时候看看ThreadLocal中是否已经有了连接, 有了就不用再去找连接池了. ThreadLocal中存放一个Map<DataSource, Connection>(有多数据源的情况, 所以是一个Map), 保证了同一个线程获取同一个Connection对象 |
 | Spring AOP失效问题                                           | 增强方法A调用增强方法B, B没被增强. @EnableAspectJAutoProxy(exposeProxy=true)设置在线程中暴露代理对象, 有了这个注解, Spring就会将代理对象存到ThreadLocal中, 通过AopContext.currentProxy()拿到当前正在调用的代理对象. |
@@ -301,23 +318,33 @@ Tomcat线程池线程数达到200后入队, 队满触发拒绝策略.
 
 ThreadLocal的原理:
 
-如果定义一个Map<key: Thread, value>, key是当前线程, 这样就可以通过当前线程获取到属于当前线程的变量. 问题1: 但是一个线程是可以拥有多个私有变量, 还需要对value处理来唯一标识每个私有变量; 问题2: 并发量足够大时, 所有的线程都去操作同一个Map, Map体积有可能会膨胀, 导致性能下降; 问题3: 这个Map维护着所有的线程的私有变量, 不知道什么时候可以销毁.
+如果定义一个Map<Thread, value>, key是线程, 这样就可以通过线程获取到属于线程的变量. 
+
+问题1: 但是一个线程是可以拥有多个私有变量, 还需要对value处理来唯一标识每个私有变量; 
+
+问题2: 并发量足够大时, 所有的线程都去操作同一个Map, Map体积有可能会膨胀, 导致性能下降; 
+
+问题3: 这个Map维护着所有的线程的私有变量, 不知道什么时候可以销毁.
 
 
 
 JDK实现: 
 
-每个Thread有一个属性: ThreadLocalMap<key: ThreadLocal, value.>, 我们可以定义多个ThreadLocal, 都存在这一个ThreadLocalMap中, ThreadLoca.set()其实就是向ThreadLocalMap中存放了一个Entry<threadLocal1, val>. 
+每个线程(每个Thread对象)有一个属性: ThreadLocalMap<key: threadLocal, value>, 每个Entry的Key是ThreadLocal对象, Value是ThreadLocal实际存储的值. 我们可以定义多个ThreadLocal, 都存在这一个ThreadLocalMap中, ThreadLocal.set()其实就是向ThreadLocalMap中存放了一个Entry<threadLocal1, val>. 
 
 threadLocal1.get() 其实是 ThreadLocalMap<>.get(threadLocal1)
 
+threadLocal1.set(s) 其实是 ThreadLocalMap<>.set(threadLocal1, s)
 
+![image-20250710180442420](D:\Users\zizhaozhang\Documents\red\typora-user-images\image-20250710180442420.png)
 
 <u>ThreadLocal内存泄露问题</u>
 
 线程池的线程使用ThreadLocal时, 如果线程没有结束, 而是去阻塞队列继续获取任务时, 因为ThreadLocal中的value是==强引用==, 就不回被垃圾回收, 引发了内存泄露. 所以我们需要在用完ThreadLocal后调用ThreadLocal.remove()
 
 
+
+为了尽可能减少tl = null后内存泄漏的影响, Thread.ThreadLocalMap中的Key是弱引用, 还可以回收掉ThreadLocal对象, 但是ThreadLocal实际存的值对象无法回收, 但是在调用tl.get()或.set()或remove()时都会遍历Entry数组清除掉key=null的无效Entry.
 
 一个ThreadLocal对象有两个引用指向它, 一个是ThreadLocal tl = new ThreadLocal<>()的tl强引用, 另一个是Thread.ThreadLocalMap.Entry.Key弱引用. 当tl = null, 还剩个弱引用, 就JVM就会将其当作垃圾回收. 那value怎么回收? ThreadLocal.remove().
 
@@ -329,7 +356,7 @@ threadLocal1.get() 其实是 ThreadLocalMap<>.get(threadLocal1)
 | -------------- | ------------------------------------------------------------ |
 | 强引用         |                                                              |
 | 软引用         | SoftReference, GC在JVM堆内存不够时, 马上要OOM了, 才会清除软引用. 主要用作缓存, 指向非必须对象. |
-| ==弱引用==     | WeakReference, 每次GC都会清理. ThreadLocal中有弱引用.        |
+| ==弱引用==     | WeakReference, 每次GC都会清理. ThreadLocal中用了弱引用.      |
 | 虚引用         | PhantomReference                                             |
 
 
@@ -427,7 +454,6 @@ CopyOnWrite系列, 写操作的时候要复制一个副本, 在副本中做各�
 # 异步编程
 
 ListenableFuture
-
 
 
 
