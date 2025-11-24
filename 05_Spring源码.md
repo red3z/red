@@ -393,7 +393,11 @@ Spring会忽略接口, Spring如何整合Mybatis?
 
 # Mybatis
 
-| JDBC的使用: SQL在代码中, 维护性差; 频繁创建和关闭数据库连接, 资源消耗大; 参数设置麻烦, 结果集处理麻烦; 没有提供**缓存**. | Mybatis的使用                                                |
+为什么要有Mybatis? 
+
+JDBC的SQL在代码中, 维护性差; 频繁创建和关闭数据库连接, 资源消耗大; 参数设置麻烦, 结果集处理麻烦
+
+|                                                              | Mybatis的使用                                                |
 | ------------------------------------------------------------ | ------------------------------------------------------------ |
 | 加载驱动: Class.forName("com.mysql.cj.jdbc.Driver"); Driver中的静态代码块中会执行 DriverManager.registerDriver(new Driver()) 将Driver在DriverManager中注册. | Reader reader = Resources.getResourceAsReader("mybatis-config.xml"); |
 | 获取连接: DriverManager.getConnection(url, username, password); 会通过SPI机制加载com.mysql.cj.jdbc.Driver. | 加载解析配置 SqlSessionFactory sqlSessionFactory = new SqlSessionFactoryBuilder().build(reader); |
@@ -416,21 +420,6 @@ Spring会忽略接口, Spring如何整合Mybatis?
          1. ClientPreparedStatement.execute() 执行SQL
          2. 处理结果集 ResultSetHandler.handleResultSets()
    3. SqlSession.commit() 清除一级缓存
-
-
-
-## Mybatis的缓存机制
-
-| 缓存策略 |      |
-| -------- | ---- |
-|          |      |
-|          |      |
-|          |      |
-
-1. BaseExecutor.query() 创建CacheKey: "接口名.方法名:SQL语句:参数";
-2. PerpetualCache.getObject() 根据CacheKey查找一级缓存
-3. 如果命中, 则直接返回; 如果未命中, 则去操作数据库.
-4. 会话关闭, 清空一级缓存
 
 
 
